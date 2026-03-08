@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "biomejs.biome",
+    "oven.bun-vscode",
+    "csstools.postcss",
+    "editorconfig.editorconfig",
+    "bradlc.vscode-tailwindcss"
+  ]
+}

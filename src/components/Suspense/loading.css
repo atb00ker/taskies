@@ -1,0 +1,8 @@
+@keyframes dotFlash {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}
+
+.animate-dotFlash {
+  animation: dotFlash 1.2s infinite both;
+}
