@@ -17,4 +17,3 @@ export const CenteredPage: FC<CenteredPageProps> = ({
     </div>
   );
 };
-

@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { ErrorBoundary } from '@/components/Error/ErrorBoundary';
 import { Layout } from '@/components/Layout/Base';
 import { DefaultLoading } from '@/components/Suspense/DefaultLoading';
+import { ConfigurationProvider } from '@/contexts/configuration';
 import { AppRouter } from '@/routes';
 
 const rootEl = document.getElementById('root');
@@ -13,11 +14,13 @@ if (rootEl) {
     <React.StrictMode>
       <BrowserRouter>
         <ErrorBoundary>
-          <Layout>
-            <Suspense fallback={<DefaultLoading />}>
-              <AppRouter />
-            </Suspense>
-          </Layout>
+          <Suspense fallback={<DefaultLoading />}>
+            <ConfigurationProvider>
+              <Layout>
+                <AppRouter />
+              </Layout>
+            </ConfigurationProvider>
+          </Suspense>
         </ErrorBoundary>
       </BrowserRouter>
     </React.StrictMode>,

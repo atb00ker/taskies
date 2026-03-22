@@ -45,7 +45,9 @@ export const ErrorView: FC<ErrorViewProps> = ({
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
         {onRetry ? (
-          <Button onClick={onRetry} variant="blue" children="Try again" />
+          <Button onClick={onRetry} variant="blue">
+            Try again
+          </Button>
         ) : null}
         <Button onClick={() => navigate(path.home)} variant="white">
           Go home
