@@ -1,9 +1,3 @@
-import type {
-  IndexedDbCursor,
-  IndexedDbGetFilteredOptions,
-} from '@/core/adapters/indexed_db/types';
-import type { TaskFilter } from '@/core/entities/configurations/task_filter';
-
 export type TaskProperties = {
   id: string;
   collection: string;
@@ -19,20 +13,18 @@ export type TaskProperties = {
   tags: string[];
 };
 
-export interface Task extends TaskProperties {
-  getTask(id: string): Promise<Task | undefined>;
-  getTasks(options: IndexedDbGetFilteredOptions): Promise<{
-    items: TaskProperties[];
-    hasMore: boolean;
-    cursor?: IndexedDbCursor;
-  }>;
-  getFilteredTasks(filters?: TaskFilter): Promise<{
-    items: TaskProperties[];
-    hasMore: boolean;
-    cursor?: IndexedDbCursor;
-  }>;
+export class Task {
+  readonly data: TaskProperties;
 
-  createTask(task: TaskProperties): Promise<void>;
-  updateTask(id: string, task: TaskProperties): Promise<void>;
-  deleteTask(id: string): Promise<void>;
+  constructor(data: TaskProperties) {
+    if (!data.title.trim()) {
+      throw new Error('Task title cannot be empty.');
+    }
+
+    this.data = data;
+  }
+
+  toProperties(): TaskProperties {
+    return this.data;
+  }
 }

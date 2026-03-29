@@ -33,3 +33,9 @@ export type IndexedDbGetFilteredResult<T> = {
   hasMore: boolean;
   cursor?: IndexedDbCursor;
 };
+
+export type IndexedDbDeleteByIndexOptions = {
+  indexName: string;
+  keyRange: IDBKeyRange;
+  direction?: IDBCursorDirection;
+};

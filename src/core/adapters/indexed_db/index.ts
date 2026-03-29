@@ -1,9 +1,12 @@
 import type {
   IndexedDbCursor,
+  IndexedDbDeleteByIndexOptions,
   IndexedDbGetFilteredOptions,
   IndexedDbGetFilteredResult,
   IndexedDbSchema,
 } from '@/core/adapters/indexed_db/types';
+
+const DEFAULT_FILTER_PAGE_SIZE = 200;
 
 export class IndexedDbStore<T> {
   constructor(
@@ -94,6 +97,9 @@ export class IndexedDbStore<T> {
    * Walks the store or an index with a cursor, returns up to `limit` rows and
    * whether more rows exist after this page.
    *
+   * **`limit`:** `0` means no pagination — returns every matching row in one
+   * response with `hasMore: false`. Otherwise defaults to `200`.
+   *
    * **Pagination:** Pass `cursor` from the previous response to continue after
    * the last row (key + primaryKey identify the cursor position in IDB order).
    * - With an **index**, the first step uses `continuePrimaryKey` to jump after
@@ -109,10 +115,11 @@ export class IndexedDbStore<T> {
       keyRange,
       direction = 'next',
       cursor,
-      limit: rawLimit = 50,
+      limit = DEFAULT_FILTER_PAGE_SIZE,
     } = options;
 
-    const pageSize = Math.max(1, rawLimit);
+    const pageSize = Math.max(0, limit);
+    const unlimited = pageSize === 0;
 
     if (!indexName && cursor) {
       if (keyRange !== undefined) {
@@ -171,13 +178,13 @@ export class IndexedDbStore<T> {
 
         const value = cursor.value as T;
 
-        if (items.length < pageSize) {
+        if (unlimited || items.length < pageSize) {
           items.push(value);
           updatedCursor = {
             key: cursor.key as IDBValidKey,
             primaryKey: cursor.primaryKey as IDBValidKey,
           };
-          if (items.length === pageSize) {
+          if (!unlimited && items.length === pageSize) {
             checkHasMore = true;
           }
           cursor.continue();
@@ -206,6 +213,36 @@ export class IndexedDbStore<T> {
       const transaction = db.transaction(this.table, 'readwrite');
       const store = transaction.objectStore(this.table);
       store.delete(key);
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error);
+    });
+  }
+
+  /**
+   * Deletes all records matching `keyRange` on the given index by walking the
+   * index cursor — no `getAll` / materialized row list.
+   */
+  async deleteByIndex(options: IndexedDbDeleteByIndexOptions): Promise<void> {
+    const { indexName, keyRange, direction = 'next' } = options;
+    const db = await this.open();
+
+    return new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(this.table, 'readwrite');
+      const store = transaction.objectStore(this.table);
+      const index = store.index(indexName);
+      const request = index.openCursor(keyRange, direction);
+
+      request.onerror = () => reject(request.error);
+
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) {
+          return;
+        }
+        cursor.delete();
+        cursor.continue();
+      };
+
       transaction.oncomplete = () => resolve();
       transaction.onabort = () => reject(transaction.error);
     });

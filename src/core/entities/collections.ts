@@ -4,10 +4,18 @@ export type CollectionProperties = {
   source: string;
 };
 
-export interface Collection extends CollectionProperties {
-  getCollection(id: string): Promise<Collection | undefined>;
-  getCollections(): Promise<Collection[]>;
-  createCollection(collection: CollectionProperties): Promise<void>;
-  updateCollection(collection: CollectionProperties): Promise<void>;
-  deleteCollection(id: string): Promise<void>;
+export class Collection {
+  readonly data: CollectionProperties;
+
+  constructor(data: CollectionProperties) {
+    if (!data.name.trim()) {
+      throw new Error('Collection name cannot be empty.');
+    }
+
+    this.data = data;
+  }
+
+  toProperties(): CollectionProperties {
+    return this.data;
+  }
 }

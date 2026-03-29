@@ -1,44 +1,36 @@
 import { IndexedDbStore } from '@/core/adapters/indexed_db';
-import type { CollectionProperties } from '@/core/entities/collections';
-import type {
+import { DATABASE_SCHEMA } from '@/core/adapters/indexed_db/schema';
+import {
   Configuration,
-  ConfigurationProperties,
+  type ConfigurationProperties,
 } from '@/core/entities/configurations';
-import { assertValidTaskFilter } from '@/core/entities/configurations/task_filter';
 import type { SourceProperties } from '@/core/entities/sources';
-import { DATABASE_SCHEMA } from '@/core/services/schema';
+import { getCollectionManager } from '@/core/services/collection';
+import { getSourceManager } from '@/core/services/source';
 
 const configurationStore = new IndexedDbStore<ConfigurationProperties>(
   'configurations',
-  DATABASE_SCHEMA,
-);
-const sourcesStore = new IndexedDbStore<SourceProperties>(
-  'sources',
-  DATABASE_SCHEMA,
-);
-const collectionsStore = new IndexedDbStore<CollectionProperties>(
-  'collections',
   DATABASE_SCHEMA,
 );
 
 const CONFIGURATION_VERSION = 1;
 const DEFAULT_NAME = 'Happy Human';
 
-export class ConfigurationService implements Configuration {
-  version: number;
-  user: ConfigurationProperties['user'];
-  views: ConfigurationProperties['views'];
-  defaults: ConfigurationProperties['defaults'];
-
-  constructor({ version, user, views, defaults }: ConfigurationProperties) {
-    this.version = version;
-    this.user = user;
-    this.views = views;
-    this.defaults = defaults;
+export class ConfigurationService extends Configuration {
+  constructor(props: ConfigurationProperties) {
+    super({
+      ...props,
+      user: {
+        name: props.user.name || DEFAULT_NAME,
+        avatar: props.user.avatar,
+      },
+    });
   }
 
   static async initialize(): Promise<ConfigurationService> {
     const stored = await configurationStore.get(CONFIGURATION_VERSION);
+    const sourceManager = getSourceManager();
+    const collectionManager = getCollectionManager();
 
     if (stored) {
       return new ConfigurationService({
@@ -53,7 +45,6 @@ export class ConfigurationService implements Configuration {
     }
 
     const sourceId = crypto.randomUUID();
-    const collectionId = crypto.randomUUID();
 
     const source: SourceProperties = {
       id: sourceId,
@@ -61,14 +52,12 @@ export class ConfigurationService implements Configuration {
       kind: 'local',
       auth: { user: '', password: '' },
     };
-    await sourcesStore.put(source);
+    await sourceManager.createSource(source);
 
-    const collection: CollectionProperties = {
-      id: collectionId,
+    await collectionManager.createCollection({
       name: 'My Tasks',
       source: sourceId,
-    };
-    await collectionsStore.put(collection);
+    });
 
     const initial: ConfigurationProperties = {
       version: CONFIGURATION_VERSION,
@@ -104,21 +93,17 @@ export class ConfigurationService implements Configuration {
         },
       ],
       defaults: {
-        source: sourceId,
+        source: source.id,
       },
     };
+    new Configuration(initial);
     await configurationStore.put(initial);
 
     return new ConfigurationService(initial);
   }
 
   async save(): Promise<void> {
-    await saveConfiguration({
-      version: this.version,
-      user: this.user,
-      views: this.views,
-      defaults: this.defaults,
-    });
+    await saveConfiguration(this.toProperties());
   }
 }
 
@@ -135,20 +120,15 @@ export async function getConfiguration(): Promise<ConfigurationService> {
 export async function saveConfiguration(
   config: ConfigurationProperties,
 ): Promise<void> {
-  for (const view of config.views) {
-    if (view.filters !== undefined) {
-      assertValidTaskFilter(view.filters);
-    }
-  }
-
-  await configurationStore.put(config);
-  singleton = new ConfigurationService({
-    version: config.version,
+  const normalized: ConfigurationProperties = {
+    ...config,
     user: {
       name: config.user.name || DEFAULT_NAME,
       avatar: config.user.avatar,
     },
-    views: config.views,
-    defaults: config.defaults,
-  });
+  };
+
+  new Configuration(normalized);
+  await configurationStore.put(normalized);
+  singleton = new ConfigurationService(normalized);
 }

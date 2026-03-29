@@ -12,15 +12,18 @@ export type SourceProperties = {
   auth: SourceAuth;
 };
 
-export interface Source extends SourceProperties {
-  /** Source */
-  getSource(id: string): Promise<Source | undefined>;
-  getSources(): Promise<Source[]>;
-  createSource(source: SourceProperties): Promise<void>;
-  updateSource(id: string, source: SourceProperties): Promise<void>;
-  deleteSource(id: string): Promise<void>;
+export class Source {
+  readonly data: SourceProperties;
 
-  /** Authentication  */
-  login(): Promise<void>;
-  logout(): Promise<void>;
+  constructor(data: SourceProperties) {
+    if (!data.name.trim()) {
+      throw new Error('Source name cannot be empty.');
+    }
+
+    this.data = data;
+  }
+
+  toProperties(): SourceProperties {
+    return this.data;
+  }
 }
