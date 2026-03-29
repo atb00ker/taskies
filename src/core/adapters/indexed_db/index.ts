@@ -54,7 +54,7 @@ export class IndexedDbStore<T> {
 
           for (const idx of storeSchema.indexes) {
             if (!store.indexNames.contains(idx.name)) {
-              store.createIndex(idx.name, idx.keyPath);
+              store.createIndex(idx.name, idx.keyPath, idx.options);
             }
           }
         }

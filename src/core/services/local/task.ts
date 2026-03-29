@@ -1,8 +1,19 @@
 import { IndexedDbStore } from '@/core/adapters/indexed_db';
+import type {
+  IndexedDbCursor,
+  IndexedDbGetFilteredOptions,
+} from '@/core/adapters/indexed_db/types';
 import type { CollectionProperties } from '@/core/entities/collections';
+import type {
+  TaskFilter,
+  TaskFilterNode,
+} from '@/core/entities/configurations/task_filter';
 import type { Task, TaskProperties } from '@/core/entities/tasks';
+import { DateHelper } from '@/core/helpers/date';
+import { HashmapHelper } from '@/core/helpers/hashmap';
 import { DATABASE_SCHEMA } from '@/core/services/schema';
 
+const FILTER_PAGE_SIZE = 200;
 const tasksStore = new IndexedDbStore<TaskProperties>('tasks', DATABASE_SCHEMA);
 const collectionsStore = new IndexedDbStore<CollectionProperties>(
   'collections',
@@ -10,15 +21,15 @@ const collectionsStore = new IndexedDbStore<CollectionProperties>(
 );
 
 export class TaskService implements Task {
+  private _dateHelper = new DateHelper();
+  private _hashmap = new HashmapHelper();
   id: string;
   collection: string;
   title: string;
   description: string;
   createdAt: Date;
   updatedAt: Date;
-  due?: Date;
-  startAt?: Date;
-  completedAt?: Date;
+  dueDate?: Date;
   tags: string[];
 
   constructor(task: TaskProperties) {
@@ -28,10 +39,94 @@ export class TaskService implements Task {
     this.description = task.description;
     this.createdAt = task.createdAt;
     this.updatedAt = task.updatedAt;
-    this.due = task.due;
-    this.startAt = task.startAt;
-    this.completedAt = task.completedAt;
+    this.dueDate = task.dueDate;
     this.tags = task.tags;
+  }
+
+  private async _getAllTasks(
+    options: Omit<IndexedDbGetFilteredOptions, 'cursor' | 'limit'>,
+  ): Promise<TaskProperties[]> {
+    const items: TaskProperties[] = [];
+    let cursor: IndexedDbCursor | undefined;
+    let hasMore = true;
+
+    while (hasMore) {
+      const result = await tasksStore.getFiltered({
+        ...options,
+        cursor,
+        limit: FILTER_PAGE_SIZE,
+      });
+      items.push(...result.items);
+      cursor = result.cursor;
+      hasMore = result.hasMore;
+    }
+
+    return items;
+  }
+
+  private async _evaluateFilterNode(
+    node: TaskFilterNode,
+  ): Promise<Map<string, TaskProperties>> {
+    if (node.type === 'collection') {
+      const result = await this._getAllTasks({
+        indexName: 'byCollection',
+        keyRange: IDBKeyRange.only(node.id),
+      });
+      return this._hashmap.toMap('id', result);
+    }
+
+    if (node.type === 'tag') {
+      const result = await this._getAllTasks({
+        indexName: 'byTag',
+        keyRange: IDBKeyRange.only(node.tag),
+      });
+      return this._hashmap.toMap('id', result);
+    }
+
+    if (node.type === 'dueDate') {
+      const [start, end] = this._dateHelper.getDateRange(node.value);
+      const result = await this._getAllTasks({
+        indexName: 'byDueDate',
+        keyRange: IDBKeyRange.bound(start, end),
+      });
+      return this._hashmap.toMap('id', result);
+    }
+
+    return new Map<string, TaskProperties>();
+  }
+
+  private async _evaluateFilters(
+    filter: TaskFilter,
+  ): Promise<Map<string, TaskProperties>> {
+    if (filter.type === 'and') {
+      if (filter.filters.length === 0) {
+        return new Map<string, TaskProperties>();
+      }
+
+      const results = (
+        await Promise.all(
+          filter.filters.map((subFilter) => this._evaluateFilters(subFilter)),
+        )
+      ).sort((a, b) => a.size - b.size);
+
+      // Since results are sorted by size, if the first result is empty, then the results of others doesn't matter as it's "and" operation.
+      return results[0].size === 0
+        ? new Map<string, TaskProperties>()
+        : this._hashmap.intersect(results);
+    }
+
+    if (filter.type === 'or') {
+      if (filter.filters.length === 0) {
+        return new Map<string, TaskProperties>();
+      }
+
+      const results = await Promise.all(
+        filter.filters.map((subFilter) => this._evaluateFilters(subFilter)),
+      );
+      return this._hashmap.union(results);
+    }
+
+    return this._evaluateFilterNode(filter);
   }
 
   async getTask(id: string): Promise<Task | undefined> {
@@ -42,9 +137,34 @@ export class TaskService implements Task {
     return new TaskService(task);
   }
 
-  async getTasks(): Promise<Task[]> {
-    const tasks = await tasksStore.getAll();
-    return tasks.map((task) => new TaskService(task));
+  async getTasks(options: IndexedDbGetFilteredOptions): Promise<{
+    items: TaskProperties[];
+    hasMore: boolean;
+    cursor?: IndexedDbCursor;
+  }> {
+    return tasksStore.getFiltered({
+      ...options,
+      limit: FILTER_PAGE_SIZE,
+    });
+  }
+
+  async getFilteredTasks(filters: TaskFilter): Promise<{
+    items: TaskProperties[];
+    hasMore: boolean;
+    cursor?: IndexedDbCursor;
+  }> {
+    if (filters === undefined) {
+      return this.getTasks({
+        limit: FILTER_PAGE_SIZE,
+      });
+    }
+
+    const taskMap = await this._evaluateFilters(filters);
+    return {
+      items: Array.from(taskMap.values()).map((task) => new TaskService(task)),
+      hasMore: false,
+      cursor: undefined,
+    };
   }
 
   async createTask(task: TaskProperties): Promise<void> {

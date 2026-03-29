@@ -1,3 +1,9 @@
+import type {
+  IndexedDbCursor,
+  IndexedDbGetFilteredOptions,
+} from '@/core/adapters/indexed_db/types';
+import type { TaskFilter } from '@/core/entities/configurations/task_filter';
+
 export type TaskProperties = {
   id: string;
   collection: string;
@@ -8,16 +14,24 @@ export type TaskProperties = {
   createdAt: Date;
   updatedAt: Date;
 
-  due?: Date;
-  startAt?: Date;
-  completedAt?: Date;
+  dueDate?: Date;
 
   tags: string[];
 };
 
 export interface Task extends TaskProperties {
   getTask(id: string): Promise<Task | undefined>;
-  getTasks(): Promise<Task[]>;
+  getTasks(options: IndexedDbGetFilteredOptions): Promise<{
+    items: TaskProperties[];
+    hasMore: boolean;
+    cursor?: IndexedDbCursor;
+  }>;
+  getFilteredTasks(filters?: TaskFilter): Promise<{
+    items: TaskProperties[];
+    hasMore: boolean;
+    cursor?: IndexedDbCursor;
+  }>;
+
   createTask(task: TaskProperties): Promise<void>;
   updateTask(id: string, task: TaskProperties): Promise<void>;
   deleteTask(id: string): Promise<void>;

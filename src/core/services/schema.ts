@@ -2,7 +2,7 @@ import type { IndexedDbSchema } from '@/core/adapters/indexed_db/types';
 
 export const DATABASE_SCHEMA = {
   name: 'taskies',
-  version: 2,
+  version: 1,
   stores: {
     configurations: {
       keyPath: 'version',
@@ -20,7 +20,8 @@ export const DATABASE_SCHEMA = {
       keyPath: 'id',
       indexes: [
         { name: 'byCollection', keyPath: 'collection' },
-        { name: 'byUpdatedAt', keyPath: 'updatedAt' },
+        { name: 'byDueDate', keyPath: 'dueDate' },
+        { name: 'byTag', keyPath: 'tags', options: { multiEntry: true } },
       ],
     },
   },
